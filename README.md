@@ -16,6 +16,12 @@ For C Demo
 make -f Makefile.sdcc
 ```
 
+By default, the Makefile.sdcc calls `clean`, to build both you can use
+
+```shell
+make -f Makefile.sdcc && make
+```
+
 ## Screenshots
 
 <figure>
