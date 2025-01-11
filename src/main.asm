@@ -80,23 +80,26 @@ sincos_loop:
 ;
     ld c, ROWS-1     ; for(row = ROWS; row > 0; row--)
     ld hl, VRAM_TEXT
+    ; sinecosine[COLUMNS + row] will be preclaculated and decremented at eaach row iteraiton
+    ld de, sinecosine + COLUMNS + ROWS
 row_loop:
-    ld de, COLUMNS-1  ; for(col = COLUMNS; col > 0; col--)
+    ; sinecosine is aligned on 256 bytes for sure
+    dec e
+    push de
+
+    ld a, (de)
+    ld d, a
+    ld e, COLUMNS-1  ; for(col = COLUMNS; col > 0; col--)
 col_loop:
     ; The code below doesn't modify DE, nor C !
 
     push hl
-    ld hl, sinecosine               ; HL = &sinecosine
-    add hl, de                      ; HL = &sinecosine[COLUMN]
+    ld h, sinecosine >> 8           ; HL = &sinecosine
+    ld l, e                         ; HL = &sinecosine[COLUMN]
     ld a, (hl)                      ; A = sinecosine[COLUMN]
+    add d                           ; A += offset
 
     ; lsa a
-
-    ld hl, sinecosine + COLUMNS     ; HL = &sinecosine[COLUMNS]
-    ld b, 0
-    add hl, bc                      ; HL = &sinecosine[COLUMNS + ROW]
-    adc a, (hl)                     ; A = sinecosine[COLUMN] + sinecosine[COLUMNS + ROW]
-
     ; Since charcode is aligned on 256, its lower byte is 0x00 for sure.
     ; So HL + A is HA
     ld h, charcode >> 8
@@ -123,6 +126,7 @@ col_loop:
 next_row:
     ; row--
     dec c
+    pop de
     jp p, row_loop
 
 ;
