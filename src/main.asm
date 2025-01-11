@@ -77,76 +77,47 @@ sincos_loop:
     ld hl, bc_addr + 1
     dec (hl)
 
-    ld hl, rowoffset
-    ld (hl), 0
-    inc hl
-    ld (hl), 0
-;
+    ; Reset rowoffset to 0
+    ld hl, 0
+    ld (rowoffset), hl
 
 ;
-    ld bc, ROWS-1     ; for(row = ROWS; row > 0; row--)
+    ld c, ROWS-1     ; for(row = ROWS; row > 0; row--)
 row_loop:
     ld de, COLUMNS-1  ; for(col = COLUMNS; col > 0; col--)
 col_loop:
-    push bc ; columns
-    push de ; rows
+    ; The code below doesn't modify DE, nor C !
 
+    ld hl, sinecosine               ; HL = &sinecosine
+    add hl, de                      ; HL = &sinecosine[COLUMN]
+    ld a, (hl)                      ; A = sinecosine[COLUMN]
 
-    ld hl, sinecosine   ; HL = &sinecosine
-    add hl, de          ; HL = &sinecosine[COLUMN]
-    ld a, (hl)          ; A = sinecosine[COLUMN]
-    ld hl, sinecosine  ; HL = &sinecosine
-    ; add hl, COLUMNS   ; HL = &sinecosine[COLUMNS]
-    push de
-    ld de, 0x50
-    add hl, de
-    pop de
-    ; / add hl, COLUMNS
-    add hl, bc  ; HL = &sinecosine[COLUMNS + ROW]
+    ; lsa a
 
-    adc a, (hl) ; A = sinecosine[COLUMN] + &sinecosine[COLUMNS + ROW]
+    ld hl, sinecosine + COLUMNS     ; HL = &sinecosine[COLUMNS]
+    ld b, 0
+    add hl, bc                      ; HL = &sinecosine[COLUMNS + ROW]
+    adc a, (hl)                     ; A = sinecosine[COLUMN] + sinecosine[COLUMNS + ROW]
 
-    push af
+    ; Since charcode is aligned on 256, its lower byte is 0x00 for sure.
+    ; So HL + A is HA
+    ld h, charcode >> 8
+    ld l, a
+    ld b, (hl)                      ; B = charcode[offset]
 
-    ld hl, charcode
-    push de
-    ld d, 0
-    ld e, a
-    add hl, de
-    pop de
-    ld a, (hl)
-    ld b, a     ; charcode[offset]
-
-    pop af
-
-    ld hl, colorcode
-    push de
-    ld d, 0
-    ld e, a
-    add hl, de
-    pop de
-    ld a, (hl)
-    ld c, a     ; charcode[offset]
-
+    ; Color code array is 256 bytes away from charcode, so silply increment H to access it
+    inc h
+    ld a, (hl)                      ; A = colorcode[offset]
 
     ; SCR_TEXT[row][col] = charcode[offset]
     ld hl, (rowoffset)  ; get the current (row * column) offset
     add hl, de;         ; add the current column
-    ; add hl, VRAM_TEXT   ; VRAM_TEXT
-    push de
-    ld de, VRAM_TEXT
-    add hl, de
-    pop de
-    ; / add hl, VRAM_TEXT
+    set 7, h            ; HL = HL + 0x8000 (VRAM_TEXT)
     ld (hl), b          ; put the charcode on screen
 
     ; SCR_COLOR[row][col] = colorcode[offset]
-    set 4, h            ; offset for color
-    ld (hl), c          ; set the color
-
-    ; pop the row/column
-    pop de  ; columns
-    pop bc  ; rows
+    set 4, h            ; HL = HL + 0x1000 (VRAM_COLOR)
+    ld (hl), a          ; set the color
 
     ; column--
     dec e
@@ -166,6 +137,35 @@ next_row:
     dec c
     jp p, row_loop
 
+;
+;   OPTIONAL THINGS
+;
+
+; ; modulate the sin table
+;     ld hl, tbl_sin
+; sinmodloop:
+;     inc (hl)  ; increment the value
+;     rr (hl)   ; rotate the value to the right
+;     inc l
+;     jp nz, sinmodloop
+
+; ; ; modulate the colorcode table
+;     ld hl, colorcode
+; colorcodeloop:
+;     ld a, (hl)
+;     inc a
+;     and 0x0F    ; only adjust foreground color
+;     ld (hl), a  ; increment the value
+;     inc l
+;     jp nz, colorcodeloop
+
+; ; modulate the charcode table
+;     ld hl, charcode
+; charcodeloop:
+;     inc (hl)
+;     inc l
+;     jp nz, charcodeloop
+
     jp loop            ; infinite loop
 
 
@@ -184,6 +184,11 @@ _end:
 ;
 
 rowoffset: DB 0,0
+
+; codecodes:
+;         DB 178,177,176,219      ; set 1
+;         DB 254, 249, 250, 46    ; set 2
+;         DB 220, 223, 254, 219   ; set 3
 
 ;
         ALIGN 0x100
@@ -207,35 +212,36 @@ charcode:
         DS 16,249 ; number of bytes used will determine
         DS 16,250 ; the thickness of the layers pattern
         DS 16,46 ;
+
 ;
 
 ;
         ALIGN 0x100  ; here the code is aligned
                     ; so that the LB adress is at $00
 colorcode:
+        DS 16, 1    ; dark blue
+        DS 16, 9    ; purple
+        DS 16, 5    ; magenta
+        DS 16, 13   ; cyan
+
+        DS 16,0     ; black
+        DS 16,1     ; dark blue
+        DS 16,9     ; purple
+        DS 16,8     ; dark grey
+
         DS 16, 8    ; dark grey
         DS 16, 9    ; purple
         DS 16, 5    ; magenta
         DS 16, 7    ; light grey
 
-        DS 16,00    ; black
-        DS 16,11    ; teal
-        DS 16,12    ; orange
-        DS 16,15    ; white
-
-        DS 16, 8    ; dark grey
-        DS 16, 9    ; purple
-        DS 16, 5    ; magenta
-        DS 16, 7    ; light grey
-
-        DS 16,00    ; black
-        DS 16,11    ; teal
-        DS 16,12    ; orange
-        DS 16,15    ; white
+        DS 16, 0    ; black
+        DS 16, 3    ; teal
+        DS 16, 11   ; orange
+        DS 16, 15   ; white
 ;
 
 ;
-        ALIGN 0x100 ; "sin 2*256" table is comprised of 512 bytes
+        ALIGN 0x100 ; "sin 256" table is comprised of 512 bytes
                     ; with values between 0 and 63
                     ; they are based on frequency by 4 x 90 degrees
                     ; (=2*pi, ie a full circle)
@@ -256,45 +262,11 @@ tbl_sin:
         DB 16,13,10,7,5,3,1,0,0,0,0,1,2,4,6,9
         DB 11,15,18,22,26,30,33,37,41,45,48,52,54,57,59,61
         DB 62,63,63,63,63,62,60,58,56,53,50,47,43,39,35,32
-
-        DB 32,28,24,20,16,13,10,7,5,3,1,0,0,0,0,1
-        DB 2,4,6,9,11,15,18,22,26,30,33,37,41,45,48,52
-        DB 54,57,59,61,62,63,63,63,63,62,60,58,56,53,50,47
-        DB 43,39,35,32,28,24,20,16,13,10,7,5,3,1,0,0
-        DB 0,0,1,2,4,6,9,11,15,18,22,26,30,33,37,41
-        DB 45,48,52,54,57,59,61,62,63,63,63,63,62,60,58,56
-        DB 53,50,47,43,39,35,32,28,24,20,16,13,10,7,5,3
-        DB 1,0,0,0,0,1,2,4,6,9,11,15,18,22,26,30
-        DB 33,37,41,45,48,52,54,57,59,61,62,63,63,63,63,62
-        DB 60,58,56,53,50,47,43,39,35,32,28,24,20,16,13,10
-        DB 7,5,3,1,0,0,0,0,1,2,4,6,9,11,15,18
-        DB 22,26,30,33,37,41,45,48,52,54,57,59,61,62,63,63
-        DB 63,63,62,60,58,56,53,50,47,43,39,35,32,28,24,20
-        DB 16,13,10,7,5,3,1,0,0,0,0,1,2,4,6,9
-        DB 11,15,18,22,26,30,33,37,41,45,48,52,54,57,59,61
-        DB 62,63,63,63,63,62,60,58,56,53,50,47,43,39,35,32
 ;
 
 ;
-        ALIGN 0x100 ; "cos 2*256" frequency 6 x 90 degrees (=2,5*pi)  
+        ALIGN 0x100 ; "cos 256" frequency 6 x 90 degrees (=2,5*pi)
 tbl_cos:
-        DB 0,0,1,4,7,11,15,20,25,31,36,42,47,51,55,59
-        DB 61,63,63,63,62,60,57,53,49,44,39,33,28,22,17,13
-        DB 8,5,2,0,0,0,1,3,5,9,13,18,23,29,34,39
-        DB 45,50,54,57,60,62,63,63,63,61,58,55,51,46,41,36
-        DB 30,25,19,14,10,6,3,1,0,0,0,2,4,7,11,16
-        DB 21,26,32,37,43,47,52,56,59,61,63,63,63,62,60,56
-        DB 53,48,43,38,32,27,22,17,12,8,5,2,0,0,0,1
-        DB 3,6,10,14,19,24,29,35,40,45,50,54,58,61,62,63
-        DB 63,62,61,58,54,50,45,40,35,29,24,19,14,10,6,3
-        DB 1,0,0,0,2,5,8,12,17,22,27,32,38,43,48,53
-        DB 56,60,62,63,63,63,61,59,56,52,48,43,37,32,26,21
-        DB 16,11,7,4,2,0,0,0,1,3,6,10,14,19,25,30
-        DB 36,41,46,51,55,58,61,63,63,63,62,60,57,54,50,45
-        DB 39,34,29,23,18,13,9,5,3,1,0,0,0,2,5,8
-        DB 13,17,22,28,33,39,44,49,53,57,60,62,63,63,63,61
-        DB 59,55,51,47,42,36,31,25,20,15,11,7,4,1,0,0
-
         DB 0,0,1,4,7,11,15,20,25,31,36,42,47,51,55,59
         DB 61,63,63,63,62,60,57,53,49,44,39,33,28,22,17,13
         DB 8,5,2,0,0,0,1,3,5,9,13,18,23,29,34,39
@@ -315,5 +287,4 @@ tbl_cos:
 
 ;
         ALIGN 0x100
-sinecosine:
-        DB 65,0 ; max value in sinecosine is 63+63=126 (x 2 =252)
+sinecosine: ; max value in sinecosine is 63+63=126 (x 2 =252)
