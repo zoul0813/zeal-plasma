@@ -77,17 +77,15 @@ sincos_loop:
     ld hl, bc_addr + 1
     dec (hl)
 
-    ; Reset rowoffset to 0
-    ld hl, 0
-    ld (rowoffset), hl
-
 ;
     ld c, ROWS-1     ; for(row = ROWS; row > 0; row--)
+    ld hl, VRAM_TEXT
 row_loop:
     ld de, COLUMNS-1  ; for(col = COLUMNS; col > 0; col--)
 col_loop:
     ; The code below doesn't modify DE, nor C !
 
+    push hl
     ld hl, sinecosine               ; HL = &sinecosine
     add hl, de                      ; HL = &sinecosine[COLUMN]
     ld a, (hl)                      ; A = sinecosine[COLUMN]
@@ -110,27 +108,17 @@ col_loop:
     ld a, (hl)                      ; A = colorcode[offset]
 
     ; SCR_TEXT[row][col] = charcode[offset]
-    ld hl, (rowoffset)  ; get the current (row * column) offset
-    add hl, de;         ; add the current column
-    set 7, h            ; HL = HL + 0x8000 (VRAM_TEXT)
+    pop hl
     ld (hl), b          ; put the charcode on screen
-
     ; SCR_COLOR[row][col] = colorcode[offset]
     set 4, h            ; HL = HL + 0x1000 (VRAM_COLOR)
     ld (hl), a          ; set the color
+    res 4, h
+    inc hl
 
     ; column--
     dec e
     jp p, col_loop
-
-    ; rowoffset += 80
-    ld hl, rowoffset
-    ld a, (hl)
-    add a, 80
-    ld (hl), a
-    jr nc, next_row
-    inc hl
-    inc (hl)
 
 next_row:
     ; row--
@@ -183,7 +171,6 @@ _end:
     EXIT()
 ;
 
-rowoffset: DB 0,0
 
 ; codecodes:
 ;         DB 178,177,176,219      ; set 1
