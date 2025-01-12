@@ -151,10 +151,13 @@ int main(void) {
 
         // plot
         for(col = 0; col < COLUMNS; col++) {
-            uint8_t offset = sinecosine[col];
+            uint8_t c = sinecosine[col];
+            uint8_t *r = &sinecosine[COLUMNS];
             for(row = 0; row < ROWS; row++) {
-                SCR_TEXT[row][col] = charcode[offset + sinecosine[row + COLUMNS]];
-                SCR_COLOR[row][col] = colorcode[offset + sinecosine[row + COLUMNS]];
+                uint8_t offset = c + *r;
+                SCR_TEXT[row][col] = charcode[offset];
+                SCR_COLOR[row][col] = colorcode[offset];
+                r++;
             }
         }
         loops++;
