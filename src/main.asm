@@ -32,6 +32,10 @@ DEFC IO_TEXT_CURS_TIME  = VID_IO_BANKED_ADDR + 0x6 ; Blink time, in frames, for 
 DEFC IO_TEXT_CURS_CHAR  = VID_IO_BANKED_ADDR + 0x7 ; Blink time, in frames, for the cursor
 DEFC IO_TEXT_CURS_COLOR = VID_IO_BANKED_ADDR + 0x8 ; Blink time, in frames, for the cursor
 
+DEFC CHARCODE_OFFSET    = 0x000
+DEFC COLORCODE_OFFSET   = 0x100
+DEFC SINECOSINE_OFFSET  = 0x200
+
 ; first step is to create a table with sine + cosine values
 ; The addition is performed on a proportionate basis
 ; the table is changed on every frame
@@ -51,6 +55,53 @@ _start:
     ld h, 0x10
     ld bc, 0x0000                   ; Map VRAM on Page 2: 0x8000
     MAP()
+;
+
+; generate charcode table
+    ;
+    ;   Generate the Charcode Table
+    ;   repeat each byte in charcodes 16 times, generating a 256-byte table
+    ;
+    ld de, charcodes + 0x0F                 ; last charcode
+    ld hl, TABLES + CHARCODE_OFFSET + 0xFF  ; end of table
+next_charcode:
+    ld a, (de)
+    ld bc, 15               ; count down from
+charcode_loop:
+    ld (hl), a
+    dec l   ; table_ptr--
+    dec c   ; j--
+    jp p, charcode_loop
+    ld a, e
+    and a, 0x0F
+    dec a
+    jp m, charcode_done
+    dec e   ; i--
+    jp next_charcode
+charcode_done:
+;
+
+; generate colorcode table
+    ;
+    ;   Generate the Colorcode Table
+    ;
+    ld de, colorcodes + 0x0F
+    ld hl, TABLES + COLORCODE_OFFSET + 0xFF
+next_colorcode:
+    ld a, (de)
+    ld bc, 15
+colorcode_loop:
+    ld (hl), a
+    dec l   ; -- table_ptr--
+    dec c   ; j--
+    jp p, colorcode_loop
+    ld a, e
+    and a, 0x0F
+    dec a
+    jp m, colorcode_done
+    dec e   ; i--
+    jp next_colorcode
+colorcode_done:
 
 loop:
     ld a, ROWS+COLUMNS
@@ -58,7 +109,7 @@ hl_addr:
     ld hl, tbl_sin          ; self modifiying
 bc_addr:
     ld bc, tbl_cos          ; self modifying
-    ld de, sinecosine
+    ld de, TABLES + SINECOSINE_OFFSET
 sincos_loop:
     push af
     ld a, (bc)
@@ -81,7 +132,7 @@ sincos_loop:
     ld c, ROWS-1     ; for(row = ROWS; row > 0; row--)
     ld hl, VRAM_TEXT
     ; sinecosine[COLUMNS + row] will be preclaculated and decremented at eaach row iteraiton
-    ld de, sinecosine + COLUMNS + ROWS
+    ld de, TABLES + SINECOSINE_OFFSET + COLUMNS + ROWS
 row_loop:
     ; sinecosine is aligned on 256 bytes for sure
     dec e
@@ -94,7 +145,7 @@ col_loop:
     ; The code below doesn't modify DE, nor C !
 
     push hl
-    ld h, sinecosine >> 8           ; HL = &sinecosine
+    ld h, TABLES + SINECOSINE_OFFSET >> 8           ; HL = &sinecosine
     ld l, e                         ; HL = &sinecosine[COLUMN]
     ld a, (hl)                      ; A = sinecosine[COLUMN]
     add d                           ; A += offset
@@ -102,7 +153,7 @@ col_loop:
     ; lsa a
     ; Since charcode is aligned on 256, its lower byte is 0x00 for sure.
     ; So HL + A is HA
-    ld h, charcode >> 8
+    ld h, TABLES + CHARCODE_OFFSET >> 8
     ld l, a
     ld b, (hl)                      ; B = charcode[offset]
 
@@ -175,61 +226,18 @@ _end:
     EXIT()
 ;
 
+    ALIGN 0x10
+charcodes:
+    DB 254,249,250,46
+    DB 254,249,250,46
+    DB 254,249,250,46
+    DB 254,249,250,46
 
-; codecodes:
-;         DB 178,177,176,219      ; set 1
-;         DB 254, 249, 250, 46    ; set 2
-;         DB 220, 223, 254, 219   ; set 3
-
-;
-        ALIGN 0x100
-charcode:
-        DS 16,254 ;
-        DS 16,249 ; number of bytes used will determine
-        DS 16,250 ; the thickness of the layers pattern
-        DS 16,46 ;
-
-        DS 16,254 ;
-        DS 16,249 ; number of bytes used will determine
-        DS 16,250 ; the thickness of the layers pattern
-        DS 16,46 ;
-
-        DS 16,254 ;
-        DS 16,249 ; number of bytes used will determine
-        DS 16,250 ; the thickness of the layers pattern
-        DS 16,46 ;
-
-        DS 16,254 ;
-        DS 16,249 ; number of bytes used will determine
-        DS 16,250 ; the thickness of the layers pattern
-        DS 16,46 ;
-
-;
-
-;
-        ALIGN 0x100  ; here the code is aligned
-                    ; so that the LB adress is at $00
-colorcode:
-        DS 16, 1    ; dark blue
-        DS 16, 9    ; purple
-        DS 16, 5    ; magenta
-        DS 16, 13   ; cyan
-
-        DS 16,0     ; black
-        DS 16,1     ; dark blue
-        DS 16,9     ; purple
-        DS 16,8     ; dark grey
-
-        DS 16, 8    ; dark grey
-        DS 16, 9    ; purple
-        DS 16, 5    ; magenta
-        DS 16, 7    ; light grey
-
-        DS 16, 0    ; black
-        DS 16, 3    ; teal
-        DS 16, 11   ; orange
-        DS 16, 15   ; white
-;
+colorcodes:
+    DB 1,9,5,13
+    DB 0,1,9,8
+    DB 8,9,5,7
+    DB 0,3,11,15
 
 ;
         ALIGN 0x100 ; "sin 256" table is comprised of 512 bytes
@@ -276,6 +284,6 @@ tbl_cos:
         DB 59,55,51,47,42,36,31,25,20,15,11,7,4,1,0,0
 ;
 
-;
-        ALIGN 0x100
-sinecosine: ; max value in sinecosine is 63+63=126 (x 2 =252)
+; this should already be aligned to 0x100
+; ALIGN 0x100
+TABLES:

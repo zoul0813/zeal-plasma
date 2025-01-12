@@ -11,51 +11,23 @@
 #define COLUMNS             80
 #define ROWS                40
 
+uint8_t charcodes[] = {
+    254,249,250,46,
+    254,249,250,46,
+    254,249,250,46,
+    254,249,250,46,
+};
+
+uint8_t colorcodes[] = {
+    1,9,5,13,
+    0,1,9,8,
+    8,9,5,7,
+    0,3,11,15,
+};
 
 /** tables */
-uint8_t charcode[256] = {
-        254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,
-        249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,
-        250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,
-        46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,
-
-        254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,
-        249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,
-        250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,
-        46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,
-
-        254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,
-        249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,
-        250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,
-        46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,
-
-        254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,
-        249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,249,
-        250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,250,
-        46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,46 ,
-};
-
-uint8_t colorcode[256] = {
-        8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
-        9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
-        5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,
-        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
-
-        00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,
-        11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,
-        12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,
-        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-
-        8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
-        9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
-        5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,
-        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
-
-        00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,
-        11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,
-        12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,
-        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-};
+uint8_t charcode[256];
+uint8_t colorcode[256];
 
 uint8_t sin[256] = {
         32,28,24,20,16,13,10,7,5,3,1,0,0,0,0,1,
@@ -97,8 +69,6 @@ uint8_t cos[256] = {
 
 uint8_t sinecosine[ROWS+COLUMNS];
 
-uint8_t value = 0; // valued used for each column
-
 uint8_t mmu_page_current;
 const __sfr __banked __at(0xF0) mmu_page0_ro;
 __sfr __at(0xF2) mmu_page2;
@@ -110,63 +80,73 @@ __sfr __banked __at(0x9d) vid_ctrl_status;
 static inline void text_map_vram(void)
 {
     mmu_page_current = mmu_page0_ro;
-    // __asm__("di");
+    __asm__("di");
     mmu_page2 = VID_MEM_PHYS_ADDR_START >> 14;
 }
 
 static inline void text_demap_vram(void)
 {
-    // __asm__("ei");
+    __asm__("ei");
     mmu_page2 = mmu_page_current;
 }
 
 /* start */
+static zos_err_t err;
 static uint8_t sin_offset = 0;
 static uint8_t cos_offset = 0;
 
-int main(void) {
-    zos_err_t err;
+void main(void) {
+    uint8_t *ptr = NULL;
+    uint8_t i = 0, j = 0, k = 0, v = 0;
 
     // disable cursor
     zvb_peri_text_curs_time = 0;
     err = ioctl(DEV_STDOUT, CMD_CLEAR_SCREEN, (void *)NULL);
     if(err != ERR_SUCCESS) exit(err);
 
+    // generate charcode table
+    ptr = &charcode[255];
+    for(i = 0; i < 16; i++) {
+        k = charcodes[i];
+        for(j = 0; j < 16; j++) {
+            *ptr = k;
+            ptr--;
+        }
+    }
+
+    // // generate colorcode table
+    ptr = &colorcode[255];
+    for(i = 0; i < 16; i++) {
+        k = colorcodes[i];
+        for(j = 0; j < 16; j++) {
+            *ptr = k;
+            ptr--;
+        }
+    }
+
     text_map_vram();
 
-    uint8_t col = 0, row = 0;
-    uint8_t i = 0; // i = column, j = row
-
-    uint8_t loops = 0;
     while(1) {
         // start
         for(i = 0; i < ROWS+COLUMNS; i++) {
-            uint8_t c = cos[cos_offset];
-            uint8_t s = sin[sin_offset];
-            sinecosine[i] = c + s;
+            j = cos[cos_offset];
+            k = sin[sin_offset];
+            sinecosine[i] = j + k;
 
             sin_offset++;
             cos_offset--;
         }
 
         // plot
-        for(col = 0; col < COLUMNS; col++) {
-            uint8_t c = sinecosine[col];
-            uint8_t *r = &sinecosine[COLUMNS];
-            for(row = 0; row < ROWS; row++) {
-                uint8_t offset = c + *r;
-                SCR_TEXT[row][col] = charcode[offset];
-                SCR_COLOR[row][col] = colorcode[offset];
-                r++;
+        for(i = 0; i < COLUMNS; i++) {
+            k = sinecosine[i];
+            ptr = &sinecosine[COLUMNS];
+            for(j = 0; j < ROWS; j++) {
+                v = k + *ptr;
+                SCR_TEXT[j][i] = charcode[v];
+                SCR_COLOR[j][i] = colorcode[v];
+                ptr++;
             }
         }
-        loops++;
     }
-
-    // unreachable
-    text_demap_vram();
-
-    err = ioctl(DEV_STDOUT, CMD_RESET_SCREEN, NULL);
-
-    return err;
 }
