@@ -13,13 +13,13 @@ make
 
 For C Demo
 ```shell
-make -f Makefile.sdcc
+make -f sdcc.mk
 ```
 
 By default, the Makefile.sdcc calls `clean`, to build both you can use
 
 ```shell
-make -f Makefile.sdcc && make
+make -f sdcc.mk && make
 ```
 
 ## Screenshots
