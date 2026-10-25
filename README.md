@@ -6,20 +6,22 @@ This repo contains an implementation in both C and Z80 ASM
 
 ## Compiling
 
-For Z80 ASM Demo
-```shell
-make
+Use the current Zeal OS CMake toolchains through [ZDE](https://github.com/zoul0813/zeal-dev-environment):
+
+```sh
+zde deps install zvb
+zde cmake
 ```
 
-For C Demo
-```shell
-make -f sdcc.mk
-```
+This builds both `bin/plasma.bin` (z88dk assembly) and `bin/plasmac.bin` (SDCC C).
+Each variant has its own CMake build tree under `build/`, so their toolchains and
+intermediate files do not conflict.
 
-By default, the Makefile.sdcc calls `clean`, to build both you can use
+To build a single variant:
 
-```shell
-make -f sdcc.mk && make
+```sh
+zde cmake build --target plasma
+zde cmake build --target plasmac
 ```
 
 ## Screenshots
