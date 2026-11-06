@@ -39,3 +39,7 @@ zde cmake build --target plasmac
 ## CREDIT
 
 Original Commodore 64 code obtained from [this video](https://www.youtube.com/watch?v=w93AncybKaY) by [Commodoreretro-programming](https://www.youtube.com/@Commodoreretro-programming) on YouTube.
+
+## License
+
+This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
